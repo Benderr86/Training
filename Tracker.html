@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Krafttraining Logger</title>
+<meta name="theme-color" content="#0c0c0f">
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#12161c; --muted:#2a2f39; --text:#e6eaf0;
+    --dim:#a9b3c1; --accent:#6dd3fb; --ok:#8bdc65; --warn:#f6b26b; --bad:#ff6b6b;
+    --touch:12px; --radius:14px; --w:420px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial;}
+  .wrap{max-width:var(--w); margin:0 auto; padding:14px 10px 28px}
+  header{position:sticky; top:0; background:linear-gradient(180deg, rgba(11,13,16,.96), rgba(11,13,16,.6) 85%, transparent); backdrop-filter: blur(6px); z-index:5}
+  .bar{display:flex; align-items:center; gap:10px; padding:10px 0}
+  .title{font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:8px}
+  .title .emoji{font-size:22px}
+  .tabs{display:flex; gap:6px}
+  .tabs button{flex:1; background:var(--panel); border:1px solid var(--muted); color:var(--text); padding:10px; border-radius:999px; font-weight:600}
+  .tabs button.active{border-color:var(--accent); box-shadow:0 0 0 1px rgba(109,211,251,.2) inset; color:#d9f3ff}
+  .panel{background:var(--panel); border:1px solid var(--muted); border-radius:var(--radius); padding:12px; margin:12px 0}
+  .row{display:flex; gap:8px; align-items:center; margin:8px 0}
+  label{font-size:12px; color:var(--dim)}
+  input, select{width:100%; background:#0e1217; color:var(--text); border:1px solid var(--muted); border-radius:10px; padding:12px; min-height:44px}
+  input[type="number"]{appearance:textfield}
+  input::placeholder{color:#7f8a99}
+  .btn{background:#0e1217; color:var(--text); border:1px solid var(--muted); border-radius:10px; padding:12px; min-height:44px}
+  .btn.prim{border-color:var(--accent); color:#d9f3ff}
+  .btn.ok{border-color:var(--ok); color:#eaffeb}
+  .btn.warn{border-color:var(--warn); color:#fff2e0}
+  .btn.bad{border-color:var(--bad); color:#ffe9e9}
+  .pill{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--muted); border-radius:999px; background:#0e1217; color:var(--dim); font-size:13px}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .sets{display:flex; flex-direction:column; gap:8px}
+  .set{display:grid; grid-template-columns:42px 1fr 1fr 42px; gap:8px; align-items:center}
+  .set .num{justify-self:center; background:#0e1217; border:1px solid var(--muted); color:var(--dim); width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:10px; font-weight:700}
+  .set .del{width:42px; height:42px}
+  .hint{font-size:12px; color:var(--dim)}
+  .list{display:flex; flex-direction:column; gap:8px; max-height:240px; overflow:auto}
+  .chip{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px; background:#0e1217; border:1px solid var(--muted); border-radius:10px}
+  .right{margin-left:auto}
+  .icons{display:flex; gap:6px}
+  .icons button{min-width:44px}
+  footer{opacity:.7; font-size:12px; text-align:center; margin-top:10px}
+  .fixedbar{position:sticky; bottom:0; background:linear-gradient(0deg, rgba(11,13,16,.96), rgba(11,13,16,.6) 85%, transparent); backdrop-filter: blur(6px); padding:10px 0; z-index:5}
+  .actions{display:flex; gap:8px}
+  .sep{height:1px; background:var(--muted); margin:8px 0}
+  .note{width:100%}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="bar">
+      <div class="title"><span class="emoji">🏋️‍♂️</span> <span>Krafttraining</span></div>
+      <span class="pill" id="datePill">📅 <span id="dateTxt"></span></span>
+      <button class="btn" id="connectCsvBtn" title="Excel-Datei verbinden">📄</button>
+      <button class="btn" id="connectJsonBtn" title="Daten-Datei verbinden">💾</button>
+      <span class="right mono" id="status"></span>
+    </div>
+    <div class="tabs">
+      <button class="active" data-tab="train">🎯 Training</button>
+      <button data-tab="plan">🗓️ Planen</button>
+      <button data-tab="ex">📝 Übungen</button>
+      <button data-tab="data">📤 Export</button>
+    </div>
+  </header>
+
+  <section class="panel" data-pane="train">
+    <div class="row">
+      <div class="grid">
+        <div>
+          <label>Vorlage</label>
+          <select id="templateSelect"></select>
+        </div>
+        <div>
+          <label>Aktion</label>
+          <div class="icons">
+            <button class="btn" id="loadTplBtn" title="Vorlage laden">📥</button>
+            <button class="btn" id="clearBtn" title="Leeren">🧹</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="grid">
+        <div>
+          <label>Übung</label>
+          <select id="exerciseSelect"></select>
+        </div>
+        <div>
+          <label>Set hinzufügen</label>
+          <button class="btn prim" id="addSetBtn">➕ Satz</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="setsArea"></div>
+
+    <div class="row">
+      <label>Notiz</label>
+      <input class="note" id="noteInput" placeholder="🗒️ optional">
+    </div>
+
+    <div class="fixedbar">
+      <div class="actions">
+        <button class="btn ok" id="saveWorkoutBtn">✅ Speichern</button>
+        <button class="btn" id="exportCsvBtn" title="Export CSV">📄 CSV</button>
+        <button class="btn" id="exportJsonBtn" title="Export JSON">💾 JSON</button>
+        <button class="btn warn" id="undoBtn" title="Letzte Aktion rückgängig">↩️</button>
+      </div>
+      <div class="hint">📌 Tipp: Verbinde die 📄 und 💾 Buttons oben, um automatisch in Dateien zu speichern.</div>
+    </div>
+  </section>
+
+  <section class="panel" data-pane="plan" hidden>
+    <div class="row">
+      <label>Vorlagen-Name</label>
+      <input id="tplName" placeholder="z. B. Oberkörper A">
+    </div>
+    <div class="row">
+      <div class="grid">
+        <div>
+          <label>Übung</label>
+          <select id="planExerciseSelect"></select>
+        </div>
+        <div>
+          <label>Set hinzufügen</label>
+          <button class="btn prim" id="planAddSetBtn">➕ Satz</button>
+        </div>
+      </div>
+    </div>
+    <div id="planArea"></div>
+    <div class="row">
+      <button class="btn ok" id="saveTplBtn">💾 Vorlage speichern</button>
+    </div>
+    <div class="sep"></div>
+    <div>
+      <label>Vorlagen</label>
+      <div class="list" id="tplList"></div>
+    </div>
+  </section>
+
+  <section class="panel" data-pane="ex" hidden>
+    <div class="row">
+      <label>Neue Übung</label>
+      <div class="grid">
+        <input id="newExercise" placeholder="z. B. Bankdrücken">
+        <button class="btn prim" id="addExerciseBtn">➕</button>
+      </div>
+    </div>
+    <div>
+      <label>Übungsliste</label>
+      <div class="list" id="exerciseList"></div>
+      <div class="hint">✏️ Tipp: Du kannst die Liste hier verwalten. Sie wird lokal gespeichert.</div>
+    </div>
+  </section>
+
+  <section class="panel" data-pane="data" hidden>
+    <div class="row">
+      <div class="grid">
+        <button class="btn" id="exportCsvBtn2">📄 CSV exportieren</button>
+        <button class="btn" id="exportJsonBtn2">💾 JSON exportieren</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="grid">
+        <button class="btn" id="importJsonBtn">📥 JSON importieren</button>
+        <input type="file" id="importFile" accept=".json" hidden>
+        <button class="btn bad" id="wipeBtn">🗑️ Alle Daten löschen</button>
+      </div>
+    </div>
+    <div class="sep"></div>
+    <div class="mono" id="stats"></div>
+  </section>
+
+  <footer>Made for momentum • Dark, minimal, mobile‑first</footer>
+</div>
+
+<script>
+/* ---------- Storage keys ---------- */
+const KEY = {
+  exercises:'kt_exercises',
+  templates:'kt_templates',
+  sessions:'kt_sessions',
+  ui:'kt_ui'
+};
+
+/* ---------- State ---------- */
+let exercises = [];
+let templates = {}; // name -> plan { name, items:[{exercise, sets:[{w,r}]}] }
+let sessions = [];  // workouts [{date, note, items:[{exercise, sets:[{w,r}]}], tpl}] 
+let current = { items: [] }; // training in progress
+let undoStack = [];
+let csvHandle = null; // FileSystemFileHandle (optional)
+let jsonHandle = null;
+
+/* ---------- Utils ---------- */
+const $ = sel => document.querySelector(sel);
+const el = (tag, attrs={}, ...kids) => {
+  const n = document.createElement(tag);
+  Object.entries(attrs).forEach(([k,v])=>{
+    if(k==='class') n.className=v;
+    else if(k==='html') n.innerHTML=v;
+    else if(k==='text') n.textContent=v;
+    else if(k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k,v);
+  });
+  kids.forEach(k=>k && n.append(k));
+  return n;
+};
+const todayStr = () => new Date().toISOString().slice(0,10);
+const clone = o => structuredClone(o);
+const pushUndo = () => undoStack.push(clone({current, sessions, templates, exercises}));
+
+/* ---------- Load/Save local ---------- */
+function loadAll(){
+  exercises = JSON.parse(localStorage.getItem(KEY.exercises) || '["Bankdrücken","Kreuzheben","Kniebeugen","Schulterdrücken","Klimmzüge","Rudern","Beinpresse"]');
+  templates = JSON.parse(localStorage.getItem(KEY.templates) || '{}');
+  sessions = JSON.parse(localStorage.getItem(KEY.sessions) || '[]');
+}
+function saveAll(){
+  localStorage.setItem(KEY.exercises, JSON.stringify(exercises));
+  localStorage.setItem(KEY.templates, JSON.stringify(templates));
+  localStorage.setItem(KEY.sessions, JSON.stringify(sessions));
+  updateStats();
+  autoWriteFiles(); // try continuous export if connected
+}
+
+/* ---------- UI init ---------- */
+function init(){
+  loadAll();
+  $('#dateTxt').textContent = todayStr();
+  renderExerciseSelectors();
+  renderExerciseList();
+  renderTemplateSelect();
+  renderTplList();
+  renderSets();
+  renderPlan();
+  updateStats();
+  bindEvents();
+  restoreFileHandles(); // try to restore connected files
+}
+
+/* ---------- Rendering ---------- */
+function renderExerciseSelectors(){
+  const opts = exercises.map(x=>`<option value="${x}">${x}</option>`).join('');
+  $('#exerciseSelect').innerHTML = opts;
+  $('#planExerciseSelect').innerHTML = opts;
+}
+function renderExerciseList(){
+  const box = $('#exerciseList');
+  box.innerHTML = '';
+  exercises.forEach((name, idx)=>{
+    box.append(
+      el('div',{class:'chip'},
+        el('span',{text:name}),
+        el('div',{class:'icons'},
+          el('button',{class:'btn', title:'Umbenennen', onclick:()=>renameExercise(idx)}, '✏️'),
+          el('button',{class:'btn bad', title:'Löschen', onclick:()=>deleteExercise(idx)}, '🗑️')
+        )
+      )
+    );
+  });
+}
+function renderTemplateSelect(){
+  const sel = $('#templateSelect');
+  sel.innerHTML = `<option value="">— keine —</option>` + Object.keys(templates).map(n=>`<option value="${n}">${n}</option>`).join('');
+}
+function renderTplList(){
+  const list = $('#tplList');
+  list.innerHTML = '';
+  Object.values(templates).forEach(t=>{
+    const count = t.items.reduce((a,x)=>a+x.sets.length,0);
+    list.append(
+      el('div',{class:'chip'},
+        el('span',{text:`${t.name} (${t.items.length} Üb., ${count} Sätze)`}),
+        el('div',{class:'icons'},
+          el('button',{class:'btn', title:'Laden', onclick:()=>loadTemplateToPlan(t.name)}, '📥'),
+          el('button',{class:'btn', title:'Umbenennen', onclick:()=>renameTemplate(t.name)}, '✏️'),
+          el('button',{class:'btn bad', title:'Löschen', onclick:()=>deleteTemplate(t.name)}, '🗑️')
+        )
+      )
+    );
+  });
+}
+function renderSets(){
+  const area = $('#setsArea');
+  area.innerHTML = '';
+  // group by exercise
+  const groups = groupByExercise(current.items);
+  Object.entries(groups).forEach(([exercise, sets])=>{
+    area.append(renderExerciseBlock(exercise, sets, false));
+  });
+}
+function renderPlan(){
+  const area = $('#planArea');
+  area.innerHTML = '';
+  const name = $('#tplName').value || '';
+  const t = tempPlanState();
+  const groups = groupByExercise(t.items);
+  Object.entries(groups).forEach(([exercise, sets])=>{
+    area.append(renderExerciseBlock(exercise, sets, true));
+  });
+}
+
+/* ---------- Helpers ---------- */
+function groupByExercise(items){
+  const map = {};
+  items.forEach(s=>{
+    if(!map[s.exercise]) map[s.exercise]=[];
+    map[s.exercise].push(s);
+  });
+  return map;
+}
+function renderExerciseBlock(exercise, sets, isPlan){
+  const wrap = el('div', {class:'panel'});
+  wrap.append(el('div',{class:'row'},
+    el('span',{class:'pill'}, '🏷️ ', el('strong',{text:exercise}))
+  ));
+  const list = el('div',{class:'sets'});
+  sets.forEach((s,i)=>{
+    list.append(renderSetRow(exercise, i+1, s, isPlan));
+  });
+  wrap.append(list);
+  return wrap;
+}
+function renderSetRow(exercise, num, set, isPlan){
+  const row = el('div',{class:'set'});
+  row.append(el('div',{class:'num', text:num}));
+  const w = el('input',{type:'number', inputmode:'decimal', step:'0.5', value:set.w ?? '', placeholder:'kg', oninput:(e)=>onChangeSet(exercise, num-1, 'w', parseFloat(e.target.value)||0, isPlan)});
+  const r = el('input',{type:'number', inputmode:'numeric', step:'1', value:set.r ?? '', placeholder:'Wdhl', oninput:(e)=>onChangeSet(exercise, num-1, 'r', parseInt(e.target.value)||0, isPlan)});
+  const del = el('button',{class:'btn del bad', title:'Satz entfernen', onclick:()=>removeSet(exercise, num-1, isPlan)}, '✖️');
+  row.append(w,r,del);
+  return row;
+}
+function onChangeSet(exercise, idx, key, val, isPlan){
+  pushUndo();
+  if(isPlan){
+    const t = tempPlanState();
+    const list = t.items.filter(s=>s.exercise===exercise);
+    if(list[idx]) list[idx][key]=val;
+    setTempPlanState(t);
+    renderPlan();
+  }else{
+    const list = current.items.filter(s=>s.exercise===exercise);
+    if(list[idx]) list[idx][key]=val;
+    renderSets();
+  }
+  debouncedSave();
+}
+function removeSet(exercise, idx, isPlan){
+  pushUndo();
+  if(isPlan){
+    const t = tempPlanState();
+    let seen=-1;
+    t.items = t.items.filter(s=>{
+      if(s.exercise===exercise){
+        seen++;
+        return seen!==idx;
+      }
+      return true;
+    });
+    setTempPlanState(t);
+    renderPlan();
+  }else{
+    let seen=-1;
+    current.items = current.items.filter(s=>{
+      if(s.exercise===exercise){
+        seen++;
+        return seen!==idx;
+      }
+      return true;
+    });
+    renderSets();
+  }
+  debouncedSave();
+}
+const debouncedSave = debounce(saveAll, 400);
+function debounce(fn, ms){ let t; return (...a)=>{clearTimeout(t); t=setTimeout(()=>fn(...a),ms)}}
+
+/* ---------- Plan temp state ---------- */
+let _planTemp = {items:[]};
+function tempPlanState(){ return _planTemp; }
+function setTempPlanState(t){ _planTemp = t; }
+
+/* ---------- Events ---------- */
+function bindEvents(){
+  document.querySelectorAll('.tabs button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      const tab = b.dataset.tab;
+      document.querySelectorAll('[data-pane]').forEach(p=>p.hidden = p.dataset.pane!==tab);
+    });
+  });
+
+  $('#addExerciseBtn').addEventListener('click', ()=>{
+    const name = $('#newExercise').value.trim();
+    if(!name) return;
+    if(exercises.includes(name)) return toast('Schon vorhanden.');
+    pushUndo();
+    exercises.push(name);
+    $('#newExercise').value='';
+    renderExerciseSelectors();
+    renderExerciseList();
+    saveAll();
+  });
+
+  $('#addSetBtn').addEventListener('click', ()=>{
+    const ex = $('#exerciseSelect').value;
+    if(!ex){ toast('Übung wählen.'); return; }
+    pushUndo();
+    current.items.push({exercise:ex, w:0, r:0});
+    renderSets();
+    debouncedSave();
+  });
+
+  $('#planAddSetBtn').addEventListener('click', ()=>{
+    const ex = $('#planExerciseSelect').value;
+    if(!ex){ toast('Übung wählen.'); return; }
+    pushUndo();
+    const t = tempPlanState();
+    t.items.push({exercise:ex, w:0, r:0});
+    setTempPlanState(t);
+    renderPlan();
+    debouncedSave();
+  });
+
+  $('#saveTplBtn').addEventListener('click', ()=>{
+    const name = $('#tplName').value.trim();
+    if(!name){ toast('Vorlagen-Name fehlt.'); return; }
+    const t = tempPlanState();
+    if(t.items.length===0){ toast('Vorlage ohne Sätze?'); return; }
+    pushUndo();
+    templates[name] = {name, items:clone(t.items)};
+    renderTemplateSelect();
+    renderTplList();
+    saveAll();
+    toast('Vorlage gespeichert.');
+  });
+
+  $('#loadTplBtn').addEventListener('click', ()=>{
+    const name = $('#templateSelect').value;
+    if(!name){ toast('Vorlage wählen.'); return; }
+    pushUndo();
+    const t = templates[name];
+    current = { tpl:name, items: clone(t.items), note:'' };
+    $('#noteInput').value = '';
+    renderSets();
+    saveAll();
+  });
+
+  $('#clearBtn').addEventListener('click', ()=>{
+    pushUndo();
+    current = { items: [] };
+    renderSets();
+  });
+
+  $('#saveWorkoutBtn').addEventListener('click', ()=>{
+    pushUndo();
+    const w = {
+      date: todayStr(),
+      tpl: current.tpl || '',
+      note: ($('#noteInput').value||'').trim(),
+      items: clone(current.items)
+    };
+    if(!w.items.length){ toast('Keine Sätze erfasst.'); return; }
+    sessions.push(w);
+    current = { items: [] };
+    $('#noteInput').value='';
+    renderSets();
+    saveAll();
+    toast('Training gespeichert.');
+  });
+
+  $('#exportCsvBtn').addEventListener('click', ()=>downloadCSV());
+  $('#exportCsvBtn2').addEventListener('click', ()=>downloadCSV());
+  $('#exportJsonBtn').addEventListener('click', ()=>downloadJSON());
+  $('#exportJsonBtn2').addEventListener('click', ()=>downloadJSON());
+
+  $('#importJsonBtn').addEventListener('click', ()=>$('#importFile').click());
+  $('#importFile').addEventListener('change', importJSON);
+
+  $('#undoBtn').addEventListener('click', ()=>{
+    const prev = undoStack.pop();
+    if(!prev){ toast('Nichts zum Rückgängig machen.'); return; }
+    exercises = prev.exercises; templates = prev.templates; sessions = prev.sessions; current = prev.current;
+    renderExerciseSelectors(); renderExerciseList(); renderTemplateSelect(); renderTplList(); renderSets(); renderPlan(); saveAll();
+  });
+
+  $('#connectCsvBtn').addEventListener('click', connectCsv);
+  $('#connectJsonBtn').addEventListener('click', connectJson);
+  $('#noteInput').addEventListener('input', debouncedSave);
+}
+
+/* ---------- Exercise ops ---------- */
+function renameExercise(idx){
+  const old = exercises[idx];
+  const name = prompt('Neuer Name für Übung:', old);
+  if(!name || name===old) return;
+  pushUndo();
+  exercises[idx]=name;
+  // Update references
+  Object.values(templates).forEach(t=>t.items.forEach(s=>{ if(s.exercise===old) s.exercise=name; }));
+  sessions.forEach(w=>w.items.forEach(s=>{ if(s.exercise===old) s.exercise=name; }));
+  current.items.forEach(s=>{ if(s.exercise===old) s.exercise=name; });
+  renderExerciseSelectors(); renderExerciseList(); renderTplList(); renderSets(); renderPlan(); saveAll();
+}
+function deleteExercise(idx){
+  const name = exercises[idx];
+  if(!confirm(`Übung „${name}“ wirklich löschen?`)) return;
+  pushUndo();
+  exercises.splice(idx,1);
+  // Remove from current and plan temp (not from past sessions)
+  current.items = current.items.filter(s=>s.exercise!==name);
+  _planTemp.items = _planTemp.items.filter(s=>s.exercise!==name);
+  renderExerciseSelectors(); renderExerciseList(); renderSets(); renderPlan(); saveAll();
+}
+
+/* ---------- Template ops ---------- */
+function renameTemplate(name){
+  const t = templates[name];
+  const newName = prompt('Neuer Vorlagen-Name:', name);
+  if(!newName || newName===name) return;
+  pushUndo();
+  delete templates[name];
+  t.name = newName;
+  templates[newName] = t;
+  renderTemplateSelect(); renderTplList(); saveAll();
+}
+function deleteTemplate(name){
+  if(!confirm(`Vorlage „${name}“ löschen?`)) return;
+  pushUndo();
+  delete templates[name];
+  renderTemplateSelect(); renderTplList(); saveAll();
+}
+function loadTemplateToPlan(name){
+  const t = templates[name];
+  setTempPlanState({items: clone(t.items)});
+  $('#tplName').value = t.name;
+  renderPlan();
+}
+
+/* ---------- Export / Import ---------- */
+function sessionsToCSV(){
+  const rows = [['date','template','exercise','set','weight','reps','note']];
+  sessions.forEach(w=>{
+    const grouped = groupByExercise(w.items);
+    Object.entries(grouped).forEach(([ex, sets])=>{
+      sets.forEach((s, i)=>{
+        rows.push([w.date, w.tpl||'', ex, String(i+1), String(s.w||0), String(s.r||0), w.note||'']);
+      });
+    });
+  });
+  return rows.map(r=>r.map(csvCell).join(',')).join('\n');
+}
+function csvCell(v){
+  const s = String(v ?? '');
+  if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"';
+  return s;
+}
+function allDataJSON(){
+  return JSON.stringify({exercises, templates, sessions}, null, 2);
+}
+function downloadCSV(){
+  const blob = new Blob([sessionsToCSV()], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'workout_log.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function downloadJSON(){
+  const blob = new Blob([allDataJSON()], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'workout_data.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importJSON(e){
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const obj = JSON.parse(reader.result);
+      if(!obj) return;
+      pushUndo();
+      exercises = obj.exercises || exercises;
+      templates = obj.templates || templates;
+      sessions = obj.sessions || sessions;
+      renderExerciseSelectors(); renderExerciseList(); renderTemplateSelect(); renderTplList(); renderSets(); renderPlan(); saveAll();
+      toast('Import erfolgreich.');
+    }catch(err){ alert('Fehler beim Import: '+err.message); }
+  };
+  reader.readAsText(f);
+}
+
+/* ---------- Continuous file writing (optional) ---------- */
+async function connectCsv(){
+  if(!window.showSaveFilePicker){ toast('Dateiverknüpfung wird von deinem Browser nicht unterstützt.'); return; }
+  try{
+    csvHandle = await showSaveFilePicker({
+      suggestedName:'workout_log.csv',
+      types:[{description:'CSV', accept:{'text/csv':['.csv']}}]
+    });
+    await persistHandle('csv', csvHandle);
+    await writeCSV();
+    toast('CSV verbunden.');
+  }catch(e){ if(e.name!=='AbortError') alert('CSV-Verknüpfung fehlgeschlagen.'); }
+}
+async function connectJson(){
+  if(!window.showSaveFilePicker){ toast('Dateiverknüpfung wird von deinem Browser nicht unterstützt.'); return; }
+  try{
+    jsonHandle = await showSaveFilePicker({
+      suggestedName:'workout_data.json',
+      types:[{description:'JSON', accept:{'application/json':['.json']}}]
+    });
+    await persistHandle('json', jsonHandle);
+    await writeJSON();
+    toast('JSON verbunden.');
+  }catch(e){ if(e.name!=='AbortError') alert('JSON-Verknüpfung fehlgeschlagen.'); }
+}
+async function writeCSV(){
+  if(!csvHandle) return;
+  try{
+    const w = await csvHandle.createWritable();
+    await w.write(new Blob([sessionsToCSV()], {type:'text/csv'}));
+    await w.close();
+    setStatus('CSV gespeichert');
+  }catch(e){ setStatus('CSV: Zugriff verweigert'); }
+}
+async function writeJSON(){
+  if(!jsonHandle) return;
+  try{
+    const w = await jsonHandle.createWritable();
+    await w.write(new Blob([allDataJSON()], {type:'application/json'}));
+    await w.close();
+    setStatus('JSON gespeichert');
+  }catch(e){ setStatus('JSON: Zugriff verweigert'); }
+}
+async function autoWriteFiles(){
+  await writeCSV();
+  await writeJSON();
+}
+
+/* ---------- Persist File Handles in IndexedDB ---------- */
+function idb(){
+  return new Promise((res,rej)=>{
+    const open = indexedDB.open('kt_files',1);
+    open.onupgradeneeded = ()=>open.result.createObjectStore('handles');
+    open.onsuccess = ()=>res(open.result);
+    open.onerror = ()=>rej(open.error);
+  });
+}
+async function persistHandle(key, handle){
+  try{
+    const db = await idb();
+    const tx = db.transaction('handles','readwrite');
+    tx.objectStore('handles').put(handle, key);
+    await new Promise((res,rej)=>{ tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); });
+    db.close();
+  }catch(e){}
+}
+async function restoreFileHandles(){
+  try{
+    const db = await idb();
+    const tx = db.transaction('handles','readonly');
+    const os = tx.objectStore('handles');
+    const getCsv = new Promise(r=>{ const req=os.get('csv'); req.onsuccess=()=>r(req.result); req.onerror=()=>r(null); });
+    const getJson = new Promise(r=>{ const req=os.get('json'); req.onsuccess=()=>r(req.result); req.onerror=()=>r(null); });
+    const [c,j] = await Promise.all([getCsv, getJson]);
+    csvHandle = c || null;
+    jsonHandle = j || null;
+    if (csvHandle || jsonHandle) setStatus('Dateien verbunden');
+  }catch(e){}
+}
+
+/* ---------- Stats ---------- */
+function updateStats(){
+  const sets = sessions.reduce((a,w)=>a+w.items.length,0);
+  $('#stats').textContent = `Übungen: ${exercises.length} • Vorlagen: ${Object.keys(templates).length} • Workouts: ${sessions.length} • Sätze: ${sets}`;
+}
+
+/* ---------- Toast / Status ---------- */
+let toastTimer;
+function toast(msg){
+  setStatus(msg);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>setStatus(''), 3000);
+}
+function setStatus(msg){ $('#status').textContent = msg || ''; }
+
+/* ---------- Kickoff ---------- */
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
